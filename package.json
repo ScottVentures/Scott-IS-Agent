@@ -1,0 +1,14 @@
+{
+  "name": "scott-is-agent",
+  "version": "0.1.0",
+  "description": "Inference sourcing agent: buys each AI step from the best live provider, pays per call (x402 on Metal), funds via Airwallex.",
+  "main": "src/server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/server.js",
+    "demo": "node src/cli.js",
+    "test": "node --test test/agent.test.js"
+  },
+  "engines": { "node": ">=20" },
+  "license": "MIT"
+}

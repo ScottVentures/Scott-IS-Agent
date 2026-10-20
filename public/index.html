@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scott IS Agent</title>
+<style>
+  :root { --bg:#0d1117; --panel:#161b22; --line:#30363d; --text:#e6edf3; --muted:#8b949e; --accent:#3fb950; --warn:#f0883e; --bad:#f85149; --blue:#58a6ff; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.5 system-ui, -apple-system, Segoe UI, sans-serif; background:var(--bg); color:var(--text); }
+  header { padding:16px 24px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  header h1 { font-size:18px; margin:0; }
+  header .tag { color:var(--muted); }
+  main { display:grid; grid-template-columns: 1fr 1fr; gap:16px; padding:16px 24px; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  section { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px; }
+  h2 { font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:0 0 12px; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; }
+  input, button, select { font:inherit; color:var(--text); background:#0d1117; border:1px solid var(--line); border-radius:6px; padding:8px 10px; }
+  input[type=text] { flex:1; min-width:200px; }
+  button { cursor:pointer; background:#238636; border-color:#2ea043; }
+  button.secondary { background:#21262d; }
+  button.danger { background:#da3633; border-color:#f85149; }
+  table { width:100%; border-collapse:collapse; }
+  td, th { text-align:left; padding:6px 4px; border-bottom:1px solid var(--line); font-variant-numeric: tabular-nums; }
+  th { color:var(--muted); font-weight:500; }
+  .spike { color:var(--bad); font-weight:600; }
+  .stat { display:flex; gap:24px; flex-wrap:wrap; }
+  .stat div b { display:block; font-size:22px; }
+  .stat div span { color:var(--muted); font-size:12px; }
+  #log { max-height:460px; overflow:auto; font:12.5px/1.5 ui-monospace, Consolas, monospace; }
+  .ev { padding:6px 0; border-bottom:1px dashed var(--line); }
+  .ev .why { color:var(--muted); }
+  .t-routed { color:var(--blue); } .t-paid { color:var(--accent); } .t-blocked { color:var(--warn); font-weight:600; }
+  .t-market { color:var(--bad); font-weight:600; } .t-failed { color:var(--warn); } .t-done { color:var(--accent); font-weight:600; } .t-esc { color:var(--bad); }
+  .steps li { margin:4px 0; } .muted { color:var(--muted); }
+  .bar { height:8px; background:#21262d; border-radius:4px; overflow:hidden; margin-top:6px; }
+  .bar > i { display:block; height:100%; background:var(--accent); width:0; transition:width .3s; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Scott IS Agent</h1>
+  <span class="tag">Inference sourcing · x402 on Metal · funded by Airwallex</span>
+</header>
+<main>
+  <section style="grid-column: 1 / -1">
+    <h2>New job</h2>
+    <div class="row">
+      <input id="task" type="text" value="Build a landing page for a Mombasa coffee shop">
+      <input id="budget" type="number" step="0.01" value="0.50" style="width:110px" title="Budget (USD)">
+      <label class="row" style="align-items:center"><input id="scenario" type="checkbox" checked> Demo crisis (price spike + timeout)</label>
+      <button id="run">Run job</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Live provider market</h2>
+    <table><thead><tr><th>Provider</th><th>$/1k tokens</th><th>Latency</th><th>Quality</th><th></th></tr></thead><tbody id="market"></tbody></table>
+  </section>
+
+  <section>
+    <h2>Budget &amp; Airwallex</h2>
+    <div class="stat">
+      <div><b id="spent">$0.0000</b><span>spent this job</span></div>
+      <div><b id="budgetLeft">$0.50</b><span>budget left</span></div>
+      <div><b id="balance">–</b><span>Airwallex wallet</span></div>
+    </div>
+    <div class="bar"><i id="bar"></i></div>
+    <h2 style="margin-top:16px">Steps</h2>
+    <ol id="steps" class="steps muted"><li>No job yet.</li></ol>
+    <div class="row" style="margin-top:8px"><button class="secondary" id="topup">Top up $10 via Airwallex</button></div>
+  </section>
+
+  <section style="grid-column: 1 / -1">
+    <h2>Agent reasoning log</h2>
+    <div id="log"><div class="muted">Waiting for a job…</div></div>
+  </section>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+let job = { budget: 0.5, spent: 0, steps: [] };
+const fmt = n => '$' + Number(n).toFixed(4);
+
+function renderMarket(list) {
+  $('market').innerHTML = list.map(p => `<tr>
+    <td>${p.name}</td>
+    <td class="${p.spiking ? 'spike' : ''}">${p.pricePer1k.toFixed(4)}${p.spiking ? ' ▲' : ''}</td>
+    <td>${p.latencyMs} ms</td><td>${p.quality}</td>
+    <td><button class="danger" onclick="spike('${p.id}')">Spike</button></td></tr>`).join('');
+}
+function renderBudget() {
+  $('spent').textContent = fmt(job.spent);
+  $('budgetLeft').textContent = fmt(job.budget - job.spent);
+  $('bar').style.width = Math.min(100, (job.spent / job.budget) * 100) + '%';
+  $('steps').innerHTML = job.steps.length ? job.steps.map(s =>
+    `<li>${s.kind} — ${s.provider ? `<b>${s.provider}</b> ${fmt(s.cost)}` : (s.status || 'pending')}</li>`).join('') : '<li>No job yet.</li>';
+}
+function log(html, cls) {
+  const d = document.createElement('div'); d.className = 'ev ' + (cls || ''); d.innerHTML = html;
+  const box = $('log'); if (box.querySelector('.muted') && box.children.length === 1) box.innerHTML = '';
+  box.prepend(d);
+}
+async function refreshBalance() {
+  const s = await fetch('/api/state').then(r => r.json());
+  $('balance').textContent = s.balance.currency + ' ' + Number(s.balance.available).toFixed(2);
+}
+async function spike(provider) {
+  await fetch('/api/spike', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ provider, priceMult: 6 }) });
+  log(`MARKET: ${provider} price spiked 6x (manual)`, 't-market');
+}
+
+$('run').onclick = async () => {
+  $('log').innerHTML = '';
+  await fetch('/api/jobs', { method:'POST', headers:{'content-type':'application/json'},
+    body: JSON.stringify({ task: $('task').value, budgetUsd: $('budget').value, scenario: $('scenario').checked ? 'spike' : null }) });
+};
+$('topup').onclick = async () => { await fetch('/api/topup', { method:'POST', headers:{'content-type':'application/json'}, body:'{"amountUsd":10}' }); refreshBalance(); log('Airwallex: topped up AI budget wallet by $10', 't-done'); };
+
+const es = new EventSource('/events');
+es.onmessage = e => {
+  const ev = JSON.parse(e.data);
+  switch (ev.type) {
+    case 'market': renderMarket(ev.providers); break;
+    case 'job_started': job = { budget: ev.budgetUsd, spent: 0, steps: [] }; renderBudget(); log(`Job started: “${ev.task}” with budget ${fmt(ev.budgetUsd)}`); break;
+    case 'planned': job.steps = ev.steps; renderBudget(); log(`Planner (${ev.source}): ${ev.steps.map(s => s.kind).join(' → ')}`); break;
+    case 'market_event': log(`MARKET: ${ev.message}`, 't-market'); break;
+    case 'routed': log(`Step ${ev.step + 1} [${ev.kind}] → <b>${ev.provider}</b> ${fmt(ev.cost)}, ${ev.latencyMs} ms<br><span class="why">Why: ${ev.reason}</span>`, 't-routed'); break;
+    case 'paid':
+      if (ev.duplicateBlocked) log(`x402: second payment BLOCKED for step ${ev.step + 1}, already paid (tx ${ev.txId})`, 't-blocked');
+      else { job.spent = ev.spent; renderBudget(); log(`x402: paid ${fmt(ev.amountUsd)} to ${ev.provider} (tx ${ev.txId})`, 't-paid'); }
+      break;
+    case 'call_failed': log(`${ev.provider} failed on step ${ev.step + 1}: ${ev.error}. Retrying without paying twice.`, 't-failed'); break;
+    case 'step_done': Object.assign(job.steps[ev.step], { provider: ev.provider, cost: job.steps[ev.step].cost }); break;
+    case 'escalated': log(`ESCALATED: ${ev.reason}`, 't-esc'); break;
+    case 'job_done': log(`Done. Spent ${fmt(ev.spent)} of ${fmt(ev.budgetUsd)}. By provider: ${Object.entries(ev.report.byProvider).map(([k,v]) => k + ' ' + fmt(v)).join(', ')}`, 't-done'); refreshBalance(); break;
+  }
+  if (ev.type === 'routed') { job.steps[ev.step].cost = ev.cost; }
+  if (ev.type === 'step_done') renderBudget();
+};
+refreshBalance();
+</script>
+</body>
+</html>
